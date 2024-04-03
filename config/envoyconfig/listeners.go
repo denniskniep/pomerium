@@ -14,6 +14,8 @@ import (
 	envoy_config_core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_config_listener_v3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	envoy_config_route_v3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	envoy_extensions_filters_http_router_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
+	envoy_extensions_filters_network_http_connection_manager "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_http_connection_manager "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_extensions_transport_sockets_tls_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	envoy_type_v3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -27,6 +29,7 @@ import (
 	"github.com/pomerium/pomerium/internal/telemetry/metrics"
 	"github.com/pomerium/pomerium/internal/telemetry/trace"
 	"github.com/pomerium/pomerium/internal/urlutil"
+	"github.com/pomerium/pomerium/pkg/protoutil"
 )
 
 const listenerBufferLimit uint32 = 32 * 1024
@@ -271,7 +274,23 @@ func (b *Builder) buildMainHTTPConnectionManagerFilter(
 		LuaFilter(luascripts.CleanUpstream),
 		LuaFilter(luascripts.RewriteHeaders),
 	}
-	filters = append(filters, HTTPRouterFilter())
+
+	var routerConfig *envoy_extensions_filters_http_router_v3.Router
+	routerConfig = &envoy_extensions_filters_http_router_v3.Router{
+		UpstreamLog: buildAccessLogs("upstream-http", cfg.Options),
+		UpstreamLogOptions: &envoy_extensions_filters_http_router_v3.Router_UpstreamAccessLogOptions{
+			FlushUpstreamLogOnUpstreamStream: true,
+		},
+	}
+
+	routerFilter := &envoy_extensions_filters_network_http_connection_manager.HttpFilter{
+		Name: "envoy.filters.http.router",
+		ConfigType: &envoy_extensions_filters_network_http_connection_manager.HttpFilter_TypedConfig{
+			TypedConfig: protoutil.NewAny(routerConfig),
+		},
+	}
+
+	filters = append(filters, routerFilter)
 
 	var maxStreamDuration *durationpb.Duration
 	if cfg.Options.WriteTimeout > 0 {
@@ -288,7 +307,10 @@ func (b *Builder) buildMainHTTPConnectionManagerFilter(
 		CodecType:                    cfg.Options.GetCodecType().ToEnvoy(),
 		StatPrefix:                   "ingress",
 		HttpFilters:                  filters,
-		AccessLog:                    buildAccessLogs(cfg.Options),
+		AccessLog:                    buildAccessLogs("ingress-http", cfg.Options),
+		AccessLogOptions: &envoy_http_connection_manager.HttpConnectionManager_HcmAccessLogOptions{
+			FlushAccessLogOnNewRequest: true,
+		},
 		CommonHttpProtocolOptions: &envoy_config_core_v3.HttpProtocolOptions{
 			IdleTimeout:       durationpb.New(cfg.Options.IdleTimeout),
 			MaxStreamDuration: maxStreamDuration,

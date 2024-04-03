@@ -84,6 +84,8 @@ func populateLogEvent(
 		return evt.Str(string(field), entry.GetCommonProperties().GetUpstreamCluster())
 	case log.AccessLogFieldUserAgent:
 		return evt.Str(string(field), entry.GetRequest().GetUserAgent())
+	case log.AccessLogFieldType:
+		return evt.Str(string(field), entry.GetCommonProperties().AccessLogType.String())
 	default:
 		return evt
 	}

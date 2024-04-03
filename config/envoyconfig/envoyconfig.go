@@ -76,7 +76,7 @@ func newDefaultEnvoyClusterConfig() *envoy_config_cluster_v3.Cluster {
 	}
 }
 
-func buildAccessLogs(options *config.Options) []*envoy_config_accesslog_v3.AccessLog {
+func buildAccessLogs(name string, options *config.Options) []*envoy_config_accesslog_v3.AccessLog {
 	lvl := options.ProxyLogLevel
 	if lvl == "" {
 		lvl = options.LogLevel
@@ -101,7 +101,7 @@ func buildAccessLogs(options *config.Options) []*envoy_config_accesslog_v3.Acces
 
 	tc := marshalAny(&envoy_extensions_access_loggers_grpc_v3.HttpGrpcAccessLogConfig{
 		CommonConfig: &envoy_extensions_access_loggers_grpc_v3.CommonGrpcAccessLogConfig{
-			LogName: "ingress-http",
+			LogName: name,
 			GrpcService: &envoy_config_core_v3.GrpcService{
 				TargetSpecifier: &envoy_config_core_v3.GrpcService_EnvoyGrpc_{
 					EnvoyGrpc: &envoy_config_core_v3.GrpcService_EnvoyGrpc{
